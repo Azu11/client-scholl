@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import GradosPages from './pages/GradosPages'
 import PrivateRoot from './routes/PrivateRoot'
 import PublicRoot from './routes/PublicRoot'
 import { AuthProvider } from './context/AuthProvider'
@@ -23,6 +24,7 @@ const App = () => {
           <Route element={<ProtectedRoute><PrivateRoot /></ProtectedRoute>}>
             <Route path='/dashboard' element={<Dashboard />} />
             <Route path='register-student' element={<FormStudent />} />
+            <Route path='grades' element={<GradosPages />} />
           </Route>
           <Route path='*' element={<ErrorPage />} />
         </Routes>
