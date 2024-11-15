@@ -1,29 +1,83 @@
 import { useEffect, useState } from 'react'
 import useUserStore from '../store/state/useUserStore'
 import { getGrados, createGrado } from '../services/GradosService'
+import { createGroup, getGroupsByDegree } from '../services/groupsService'
 
 const GradosPages = () => {
   const [grados, setGrados] = useState([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [groupData, setGroupData] = useState({
+    year: '',
+    name: '',
+    degreeId: ''
+  })
+  const [groups, setGroups] = useState({})
+  const [showGroupsModal, setShowGroupsModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [gradoData, setGradoData] = useState({
     name: ''
   })
   const { token } = useUserStore()
 
+  // Fetch Grados and Groups on load
   useEffect(() => {
     const fetchData = async () => {
       try {
         const fetchedGrados = await getGrados(token)
         setGrados(fetchedGrados)
+
+        // Fetch groups for each grado
+        const groupsByDegree = {}
+        for (const grado of fetchedGrados) {
+          const groupsForDegree = await getGroupsByDegree(grado.id, token)
+          groupsByDegree[grado.id] = groupsForDegree
+        }
+        setGroups(groupsByDegree)
+
         setIsLoading(false)
       } catch (error) {
-        console.error('Error fetching grados:', error.message)
+        console.error('Error fetching grados or groups:', error.message)
         setIsLoading(false)
       }
     }
+
     fetchData()
   }, [token])
+
+  const handleAddGroupClick = async (degreeId) => {
+    setGroupData({ ...groupData, degreeId })
+    setShowGroupsModal(true)
+  }
+
+  const handleCloseGroupModal = () => {
+    setShowGroupsModal(false)
+  }
+
+  const handleGroupFormSubmit = async (e) => {
+    e.preventDefault()
+
+    if (!groupData.year || isNaN(groupData.year)) {
+      alert('Por favor ingresa un año válido.')
+      return
+    }
+
+    if (groupData.name.length < 5) {
+      alert('El nombre del grupo debe tener al menos 5 caracteres.')
+      return
+    }
+
+    try {
+      const newGroup = await createGroup({ ...groupData, year: Number(groupData.year), averagingpreperiod_gru: 0, annual_gru_average: 0, token })
+
+      setGroups(prevGroups => ({
+        ...prevGroups,
+        [groupData.degreeId]: [...(prevGroups[groupData.degreeId] || []), newGroup]
+      }))
+      handleCloseGroupModal()
+    } catch (error) {
+      console.error('Error creando el grupo:', error.message)
+    }
+  }
 
   const handleAddGradoClick = () => {
     setIsModalOpen(true)
@@ -73,7 +127,7 @@ const GradosPages = () => {
               Name
             </th>
             <th scope='col' className='px-6 py-3'>
-              Status
+              Grupos
             </th>
             <th scope='col' className='px-6 py-3'>
               Action
@@ -96,17 +150,32 @@ const GradosPages = () => {
               </th>
               <td className='px-6 py-4'>
                 <div className='flex items-center'>
-                  {grado.status}
-                  <div className='h-2.5 w-2.5 rounded-full bg-green-500 mr-2' />{' '}
+                  {groups[grado.id] && groups[grado.id].length > 0
+                    ? (
+                        groups[grado.id].map((group) => (
+                          <span key={group.id} className='block text-sm'>{group.name}</span>
+                        ))
+                      )
+                    : (
+                      <span>No hay grupos</span>
+                      )}
                 </div>
               </td>
               <td className='px-6 py-4'>
-                <a
-                  href='#'
-                  className='font-medium text-blue-600 dark:text-blue-500 hover:underline'
-                >
-                  Editar Grados
-                </a>
+                <div className='flex flex-col space-y-2'>
+                  <a
+                    href='#'
+                    className='font-medium text-blue-600 dark:text-blue-500 hover:underline'
+                  >
+                    Editar Grados
+                  </a>
+                  <a
+                    onClick={() => handleAddGroupClick(grado.id)}
+                    className='font-medium text-blue-600 dark:text-blue-500 hover:underline'
+                  >
+                    Agregar Grupos
+                  </a>
+                </div>
               </td>
             </tr>
           ))}
@@ -122,37 +191,63 @@ const GradosPages = () => {
         </button>
       </div>
 
-      {/* Modal */}
-      {isModalOpen && (
+      {showGroupsModal && (
         <div className='fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50 z-50'>
-          <div className='bg-white p-6 rounded-lg shadow-lg w-96'>
-            <h2 className='text-lg font-semibold mb-4'>Crear Grado</h2>
-            <form onSubmit={handleSubmit}>
+          <div className='bg-white p-16 rounded-lg shadow-lg w-90'>
+            <h2 className='text-lg font-semibold mb-4'>Agregar Grupo</h2>
+            <form onSubmit={handleGroupFormSubmit}>
               <div className='mb-4'>
-                <label className='block text-sm font-medium text-gray-700'>Nombre del Grado</label>
-                <input
-                  type='text'
-                  name='name'
-                  value={gradoData.name}
-                  onChange={handleChange}
-                  className='mt-1 block w-full p-2 border border-gray-300 rounded-md'
-                  placeholder='Ingrese nombre del grado'
-                />
+                <label>
+                  Año:
+                  <input
+                    type='number'
+                    value={groupData.year}
+                    onChange={(e) => setGroupData({ ...groupData, year: e.target.value })}
+                    required
+                  />
+                </label>
+              </div>
+              <div className='mb-4'>
+                <label>
+                  Nombre:
+                  <input
+                    type='text'
+                    value={groupData.name}
+                    onChange={(e) => setGroupData({ ...groupData, name: e.target.value })}
+                    required
+                  />
+                </label>
               </div>
               <div className='flex justify-end'>
-                <button
-                  type='button'
-                  className='text-white bg-red-500 hover:bg-red-600 rounded-lg px-4 py-2 mr-2'
-                  onClick={handleCloseModal}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type='submit'
-                  className='text-white bg-blue-500 hover:bg-blue-600 rounded-lg px-4 py-2'
-                >
-                  Crear Grado
-                </button>
+                <button className='text-white bg-blue-500 hover:bg-blue-600 rounded-lg px-4 py-2' type='submit'>Crear Grupo</button>
+                <button className='text-white bg-red-500 hover:bg-red-600 rounded-lg px-4 py-2 mr-2' type='button' onClick={handleCloseGroupModal}>Cancelar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className='fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50'>
+          <div className='bg-white p-8 rounded-lg'>
+            <h2 className='text-lg font-semibold mb-4'>Agregar Grado</h2>
+            <form onSubmit={handleSubmit}>
+              <div className='mb-4'>
+                <label>
+                  Nombre del Grado:
+                  <input
+                    type='text'
+                    name='name'
+                    value={gradoData.name}
+                    onChange={handleChange}
+                    required
+                  />
+                </label>
+              </div>
+              <div className='flex justify-end'>
+                <button className='text-white bg-blue-500 hover:bg-blue-600 rounded-lg px-4 py-2' type='submit'>Crear Grado</button>
+                <button className='text-white bg-red-500 hover:bg-red-600 rounded-lg px-4 py-2 mr-2' type='button' onClick={handleCloseModal}>Cancelar</button>
               </div>
             </form>
           </div>
